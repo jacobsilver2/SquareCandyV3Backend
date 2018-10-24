@@ -8,7 +8,8 @@ const Query = {
 
     // super easy if you don't need to
     // run extra logic or check for auth
-    items: forwardTo('db')
+    items: forwardTo('db'),
+    item: forwardTo('db')
 
 };
 
