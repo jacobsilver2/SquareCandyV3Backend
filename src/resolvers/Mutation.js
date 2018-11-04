@@ -115,30 +115,48 @@ const Mutations = {
         // Email them that reset token
     },
 
-    async resetPassword(parent, {email, password}, ctx, info){
+    async resetPassword(parent, args, ctx, info){
         // 1. Check if the passwords match
-        const user = await ctx.db.query.user({ where: { email }});
-        if (!user) {
-            throw new Error(`No user found for email: ${email}`);
+        if (args.password !== args.confirmPassword) {
+            throw new Error('Passwords don\'t match bub');
         }
-        const valid = bcrypt.compare(password, user.password);
-        if (!valid) {
-            throw new Error('Invalid password');
-        }
-        // 2. Check if it's a legit reset toekn
-        
+        // 2. Check if it's a legit reset token
         // 3. Check if it's expiried
-
+        // steps 2 and 3 can be done in one step
+        
+        // querying for users instead of user gives us many more search options.
+        // first we query for the reset token, second we make sure the expiry is within one hour
+        const [user] = await ctx.db.query.users({
+            where: {
+                resetToken: args.resetToken,
+                resetTokenExpiry_gte: Date.now() - 3600000
+            },
+        });
+        if(!user){
+            throw new Error('this token is either invalid or expired');
+        }
+        
         // 4. Hash their new passwords
+        const password  = await bcrypt.hash(args.password, 10);
 
         // 5. Save the new password to the user and remove old reset token fields
-
+        const updatedUser = await ctx.db.mutation.updateUser({
+            where: {email: user.email},
+            data: {
+                password,
+                resetToken: null,
+                resetTokenExpiry: null
+            }
+        })
         // 6. Generate JWT
-
+        const token = jwt.sign({ userId: updatedUser.id}, process.env.APP_SECRET);
         // 7.  Set the JWT Cookie
-
+        ctx.response.cookie('token', token, {
+            httpOnly: true,
+            maxAge: 1000 * 60 * 60 * 24 * 365
+        })
         // 8. return the new User
-
+        return updatedUser;
     }
 };
 
