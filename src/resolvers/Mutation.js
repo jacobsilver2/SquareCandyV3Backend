@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { randomBytes } = require('crypto');
 // this takes callback-based functions and turns them into promise-based functions.  This is a stock utility from Node.
 const { promisify } = require('util');
+const {transport, makeANiceEmail} = require('../mail');
 
 const Mutations = {
     async createItem(parent, args, ctx, info) {
@@ -110,9 +111,16 @@ const Mutations = {
             where: {email: args.email},
             data: { resetToken, resetTokenExpiry }
         })
-        // console.log(res);
-        return {message: "thanks bub"};
         // Email them that reset token
+        const mailResponse = await transport.sendMail({
+            from: 'jacobsilver2@mac.com',
+            to: user.email,
+            subject: 'Your password reset token',
+            html: makeANiceEmail(`Your password reset token is here! \n\n <a href='${process.env.FRONTEND_URL}/reset?resetToken=${resetToken}'>Click Here To Reset</a>`)
+        })
+
+        // Return the message
+        return {message: "thanks bub"};
     },
 
     async resetPassword(parent, args, ctx, info){
