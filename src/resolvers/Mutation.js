@@ -4,6 +4,7 @@ const { randomBytes } = require('crypto');
 // this takes callback-based functions and turns them into promise-based functions.  This is a stock utility from Node.
 const { promisify } = require('util');
 const {transport, makeANiceEmail} = require('../mail');
+const { hasPermission } = require('../utils');
 
 const Mutations = {
     async createItem(parent, args, ctx, info) {
@@ -176,6 +177,38 @@ const Mutations = {
         })
         // 8. return the new User
         return updatedUser;
+    },
+    async updatePermissions(parent, args, ctx, info) {
+        // 1. Check if the user is logged in
+        if(!ctx.request.userId) {
+            throw new Error ('Must be logged in');
+        }
+        // 2. Query the current user
+        const currentUser = await ctx.db.query.user(
+         {
+            where: {
+                id: ctx.request.userId
+            },
+         },
+         info)
+        // 3. Check if they permissions to do this
+        hasPermission(currentUser, ['ADMIN', 'PERMISSIONUPDATE']);
+        //4. Update permissions
+        return ctx.db.mutation.updateUser(
+         {
+            data: {
+                permissions: {
+                    // this has to be done this way due to the fact that we defined permissions as an Enum in datamodel.yml
+                    set: args.permissions,
+                },
+            },
+            where: {
+                // the reason we use this instead of ctx.request.userId is because we might be updating some other user, not ourself
+                //, the currently logged in user
+                id: args.userId
+            },
+        }, info
+        );
     }
 };
 
