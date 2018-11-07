@@ -43,9 +43,16 @@ const Mutations = {
     async deleteItem(parent, args, ctx, info) {
         const where = {id: args.id };
         //1. Find the item
-        const item = await ctx.db.query.item({ where }, `{ id title}`);
+        const item = await ctx.db.query.item({ where }, `{ id title user {id}}`);
+
         //2. Check if they own the item or have permissions
-        //Todo
+        // boolean to determine if the user is the user they are attempting to modify permissions for
+        const ownsItem = item.user.id === ctx.request.userId;
+        // boolean to determine if the user has any of those permissions
+        const hasPermissions = ctx.request.user.permissions.some(permission => ['ADMIN', 'ITEMDELETE'].includes(permission))
+        if (!ownsItem && !hasPermissions) {
+            throw new Error ("you don't have permssions to do that.")
+        } 
         //3. Delete it
         return ctx.db.mutation.deleteItem({ where }, info);
     },
@@ -209,7 +216,43 @@ const Mutations = {
             },
         }, info
         );
-    }
+    },
+    async addToCart(parent, args, ctx, info) {
+        // 1. Make sure they're signed in
+        const userId = ctx.request.userId;
+        if (!userId){
+            throw new Error ("You must be signed in");
+        }
+        // 2. Query the users current cart
+        const [existingCartItem] = await ctx.db.query.cartItems({
+            where: {
+                user: {id: userId},
+                item: {id: args.id},
+            },
+        });
+        // 3. Check if the item is already in the cart  and increment by 1 if it is
+        if (existingCartItem) {
+            console.log("This item is already in the cart")
+            return ctx.mutation.updateCartItem(
+             {
+                where: { id: existingCartItem.id },
+                data: { quantity: existingCartItem.quantity + 1 },
+             }, 
+             info
+             );
+        }
+        // 4.  If it's not, create a fresh cart item for the user
+        return ctx.db.mutation.createCartItem({
+            data: {
+                user: {
+                    connect: { id: userId },
+                },
+                item: {
+                    connect: {id: args.id }
+                } ,
+            },
+        }, info );
+    },
 };
 
 module.exports = Mutations;
