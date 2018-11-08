@@ -219,7 +219,7 @@ const Mutations = {
     },
     async addToCart(parent, args, ctx, info) {
         // 1. Make sure they're signed in
-        const userId = ctx.request.userId;
+        const { userId } = ctx.request;
         if (!userId){
             throw new Error ("You must be signed in");
         }
@@ -233,7 +233,7 @@ const Mutations = {
         // 3. Check if the item is already in the cart  and increment by 1 if it is
         if (existingCartItem) {
             console.log("This item is already in the cart")
-            return ctx.mutation.updateCartItem(
+            return ctx.db.mutation.updateCartItem(
              {
                 where: { id: existingCartItem.id },
                 data: { quantity: existingCartItem.quantity + 1 },
@@ -242,17 +242,43 @@ const Mutations = {
              );
         }
         // 4.  If it's not, create a fresh cart item for the user
-        return ctx.db.mutation.createCartItem({
-            data: {
-                user: {
-                    connect: { id: userId },
+        return ctx.db.mutation.createCartItem(
+            {
+                data: {
+                    user: {
+                        connect: { id: userId },
+                    },
+                    item: {
+                        connect: {id: args.id },
+                    },
                 },
-                item: {
-                    connect: {id: args.id }
-                } ,
-            },
-        }, info );
+            }, 
+            info 
+        );
     },
+    async removeFromCart(parent, args, ctx, info) {
+        // 1. Find the cart item
+        const cartItem = await ctx.db.query.cartItem({
+            where: {
+                id: args.id,
+            },
+        }, `{ id, user { id }}`);
+
+        // 2. Make sure we found an item
+        if (!cartItem){
+            throw new Error("No cart item found");
+        }
+        // 3. Make sure they own the cart item
+        if (cartItem.user.id !== ctx.request.userId) {
+            throw new Error("You are cheating")
+        }
+        // 4. Delete the cart item
+        return ctx.db.mutation.deleteCartItem({
+            where: {
+                id: args.id
+            }
+        }, info )
+    }
 };
 
 module.exports = Mutations;
